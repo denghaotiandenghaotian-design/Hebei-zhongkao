@@ -349,6 +349,25 @@ table.tbl th{background:var(--panel-2);color:var(--gold-soft)}
 .ans-mark{color:#3ec98a;font-weight:800;margin-left:2px}
 .ans-analysis{margin-top:8px;font-size:13px;color:#9fc2e8;background:rgba(21,35,71,.7);border-left:3px solid var(--gold);padding:8px 10px;border-radius:0 8px 8px 0;line-height:1.7}
 
+/* ---------- 2027考试预测板块 ---------- */
+.fc-hero{background:linear-gradient(135deg,#1c2c55,#16213e);border:1px solid rgba(226,162,82,.35);border-radius:14px;padding:18px 20px;margin-bottom:18px}
+.fc-hero-h{font-size:20px;font-weight:800;color:var(--gold);margin-bottom:6px}
+.fc-hero-s{font-size:13.5px;color:#cfe0f5;line-height:1.7;margin-bottom:8px}
+.fc-hero-d{font-size:12.5px;color:var(--text-dim);line-height:1.7;border-top:1px dashed rgba(155,176,208,.25);padding-top:8px}
+.fc-sec{margin-bottom:22px}
+.fc-sec-h{font-size:17px;font-weight:800;color:var(--gold-soft);display:flex;align-items:center;gap:10px;margin-bottom:10px}
+.fc-sec-n{display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:8px;background:var(--gold);color:#1a1305;font-size:14px;font-weight:800}
+.fc-sub{font-size:13px;font-weight:700;color:#9fc2e8;margin:12px 0 8px}
+.fc-items{display:flex;flex-direction:column;gap:10px}
+.fc-item{margin-bottom:6px}
+.fc-add{margin-bottom:6px;border-left:3px solid var(--gold)}
+.fc-item-h{font-size:14px;font-weight:700;color:#f0e6d6;display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:4px}
+.fc-item-d{font-size:13px;color:var(--text-dim);line-height:1.8}
+.fc-hot-t{font-size:15px;font-weight:700;color:var(--gold-soft);margin-bottom:4px}
+.fc-hot-meta{font-size:12.5px;color:#9fc2e8;margin-bottom:4px}
+.fc-types{display:flex;flex-wrap:wrap;gap:8px}
+.fc-foot{margin-top:18px;padding-top:10px;border-top:1px solid var(--line);font-size:12px;color:var(--text-dim);text-align:center}
+
 /* ---------- 打印（导出 PDF） ---------- */
 @media print{
   @page{size:A4 landscape;margin:8mm}
@@ -361,4 +380,13 @@ table.tbl th{background:var(--panel-2);color:var(--gold-soft)}
   .print-area svg{width:100% !important;height:auto !important}
   .print-area text{fill:#111 !important}
   .mindmap-wrap{min-width:0}
+  /* 预测板块打印：深色正文转黑，保证可读 */
+  .print-area,.print-area *{color:#111 !important}
+  .print-area .card{background:#fff !important;border:1px solid #ccc !important}
+  .print-area .fc-hero{background:#fff !important;border:1px solid #999 !important}
+  .print-area .fc-hero-h,.print-area .fc-sec-h,.print-area .fc-item-h,.print-area .fc-hot-t,.print-area .fc-sub,.print-area .section-title,.print-area .paper-title{color:#111 !important}
+  .print-area .chip{background:#eee !important;border:1px solid #999 !important;color:#111 !important}
+  .print-area .fc-sec-n{background:#333 !important;color:#fff !important}
+  .print-area .btn{display:none !important}
+  .print-area .fc-foot{color:#444 !important}
 }
