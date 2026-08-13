@@ -30,6 +30,7 @@
   const EXTRA = [];
   ((window.YJ_DATA && window.YJ_DATA.mockBank && window.YJ_DATA.mockBank.questions) || []).forEach(q => EXTRA.push(q));
   ((window.YJ_DATA && window.YJ_DATA.realPapers && window.YJ_DATA.realPapers.papers) || []).forEach(p => (p.questions || []).forEach(q => EXTRA.push(q)));
+  ((window.YJ_DATA && window.YJ_DATA.forecast && window.YJ_DATA.forecast.papers) || []).forEach(p => (p.questions || []).forEach(q => EXTRA.push(q)));
   EXTRA.forEach(q => { const n = normQ(q); if (n && !QMAP[n.id]) { Q.push(n); QMAP[n.id] = n; } });
   const CHAPTERS = DATA.chapters || [];
   const CHMAP = {}; CHAPTERS.forEach(c => CHMAP[c.code] = c);
@@ -155,7 +156,7 @@
   }
 
   /* ---------------- 渲染调度 ---------------- */
-  const VIEWS = { dashboard: "学习概览", practice: "题库练习", review: "章节复习", wrongbook: "错题收藏", exam: "模拟考试", papers: "试卷库", progress: "进度跟踪", summary: "考点归纳", mindmap: "思维导图", knowledge: "考点知识库", lectures: "名师讲课" };
+  const VIEWS = { dashboard: "学习概览", practice: "题库练习", review: "章节复习", wrongbook: "错题收藏", exam: "模拟考试", papers: "试卷库", progress: "进度跟踪", summary: "考点归纳", mindmap: "思维导图", forecast: "2027预测", knowledge: "考点知识库", lectures: "名师讲课" };
   let CURRENT = "dashboard";
   const content = () => $("#content");
 
@@ -165,7 +166,7 @@
     $("#viewTitle").textContent = VIEWS[v] || "";
     document.body.classList.remove("nav-open");
     SESSION = null; EXAM = null;
-    ({ dashboard: renderDashboard, practice: renderPractice, review: renderReview, wrongbook: renderWrongbook, exam: renderExam, papers: renderPapers, progress: renderProgress, summary: renderSummary, mindmap: renderMindmap, knowledge: renderKnowledge, lectures: renderLectures }[v] || renderDashboard)();
+    ({ dashboard: renderDashboard, practice: renderPractice, review: renderReview, wrongbook: renderWrongbook, exam: renderExam, papers: renderPapers, progress: renderProgress, summary: renderSummary, mindmap: renderMindmap, forecast: renderForecast, knowledge: renderKnowledge, lectures: renderLectures }[v] || renderDashboard)();
     content().scrollTop = 0;
   }
 
@@ -818,6 +819,7 @@
   const MINDMAPS = (window.YJ_DATA && window.YJ_DATA.mindmaps) || [];
   const MOCKBANK = (window.YJ_DATA && window.YJ_DATA.mockBank) || { questions: [], papers: [] };
   const REALPAPERS = (window.YJ_DATA && window.YJ_DATA.realPapers) || { papers: [] };
+  const FORECAST = (window.YJ_DATA && window.YJ_DATA.forecast) || { papers: [] };
   let MM_PRESELECT = "";
 
   function renderSummary() {
@@ -945,6 +947,7 @@
       <div class="seg" id="pbSeg">
         <button class="seg-btn active" data-tab="mock">📝 模拟试卷（10套）</button>
         <button class="seg-btn" data-tab="real">📜 历年真题（2021-2025）</button>
+        <button class="seg-btn" data-tab="forecast">🔮 预测卷（2027）</button>
       </div>
       <div class="muted" style="margin:10px 0 12px" id="pbTip"></div>
       <div id="pbBody"></div>`;
@@ -964,14 +967,17 @@
     if (PAPER_TAB === "real") {
       tip.textContent = "近5年全套真题（回忆整理版）：依据公开考情与考生回忆整理，题型题量完全对齐官方真题（单选20×1 / 多选10×2 / 案例5题共120分），个别表述以官方试卷为准。";
       body.innerHTML = REALPAPERS.papers.map(p => { const st = paperStats(p.questions); return paperCard(p, st, true); }).join("");
+    } else if (PAPER_TAB === "forecast") {
+      tip.textContent = "2027考前预测卷（3套）：基于「知识点/热点/题目」三维预测独立编制，附标准答案与解析，难度与真题相当，覆盖新能源、智能建造、绿色施工、设备更新等强化方向。";
+      body.innerHTML = FORECAST.papers.map(p => { const st = paperStats(p.questions); return paperCard(p, st, false); }).join("");
     } else {
       tip.textContent = "10套全真模拟卷：引擎按试卷编号固定抽题（同一套卷每次题目一致），附标准答案，支持限时考试与答案浏览。";
       body.innerHTML = MOCKBANK.papers.map(p => paperCard(p, { s: 20, m: 10, c: 4 }, false)).join("");
     }
     body.querySelectorAll("[data-act]").forEach(b => b.onclick = () => {
-      const act = b.dataset.act, id = b.dataset.id, isReal = PAPER_TAB === "real";
-      if (act === "answer") renderPaperDetail(id, isReal);
-      else startPaperExam(id, isReal);
+      const act = b.dataset.act, id = b.dataset.id, src = PAPER_TAB;
+      if (act === "answer") renderPaperDetail(id, src);
+      else startPaperExam(id, src);
     });
   }
   function paperCard(p, st, isReal) {
@@ -983,14 +989,15 @@
         <button class="btn btn-ghost" data-act="answer" data-id="${p.id}">📖 试卷+标准答案</button>
       </div></div>`;
   }
-  function getPaperQuestions(pid, isReal) {
-    if (isReal) { const p = REALPAPERS.papers.find(x => x.id === pid); return { qs: p ? p.questions.slice() : [], meta: p }; }
+  function getPaperQuestions(pid, src) {
+    if (src === "real") { const p = REALPAPERS.papers.find(x => x.id === pid); return { qs: p ? p.questions.slice() : [], meta: p }; }
+    if (src === "forecast") { const p = FORECAST.papers.find(x => x.id === pid); return { qs: p ? p.questions.slice() : [], meta: p }; }
     const p = MOCKBANK.papers.find(x => x.id === pid);
     const b = buildMockPaper(pid);
     return { qs: [].concat(b.singles, b.multis, b.cases), meta: p };
   }
-  function startPaperExam(pid, isReal) {
-    const { qs, meta } = getPaperQuestions(pid, isReal);
+  function startPaperExam(pid, src) {
+    const { qs, meta } = getPaperQuestions(pid, src);
     if (!qs.length) { alert("试卷为空。"); return; }
     CURRENT = "exam";
     $$(".nav-item").forEach(b => b.classList.toggle("active", b.dataset.view === "exam"));
@@ -998,8 +1005,8 @@
     EXAM = { singles: qs.filter(q => q.type === "single"), multis: qs.filter(q => q.type === "multiple"), cases: qs.filter(q => q.type === "case"), picks: {}, revealed: false, timeMode: true, deadline: Date.now() + (meta ? meta.minutes : 240) * 60000, phase: "paper", start: Date.now(), caseScores: {}, title: meta ? meta.title : "试卷" };
     renderPaper();
   }
-  function renderPaperDetail(pid, isReal) {
-    const { qs, meta } = getPaperQuestions(pid, isReal);
+  function renderPaperDetail(pid, src) {
+    const { qs, meta } = getPaperQuestions(pid, src);
     const st = paperStats(qs);
     let show = true;
     const header = `<button class="btn btn-ghost" id="pbBack" style="margin-bottom:12px">← 返回试卷库</button>
@@ -1034,6 +1041,92 @@
     }
     const opts = q.options.map((op, j) => { const L = String.fromCharCode(65 + j); const is = (q.answer || []).includes(L); return `<div class="option ${is ? "ans-right" : ""}" style="cursor:default;pointer-events:none">${L}. ${esc(op)}${is ? ' <span class="ans-mark">✓</span>' : ""}</div>`; }).join("");
     return `<div class="mock-q" style="margin-bottom:16px"><div class="q-stem">${i + 1}. ${esc(q.stem)}</div>${opts}${show ? `<div class="ans-analysis">✅ 标准答案：${esc((q.answer || []).join("、"))} —— ${esc(q.analysis)}</div>` : ""}</div>`;
+  }
+
+  /* ============== 2027年考试预测板块 ============== */
+  function tagChip(t) {
+    const m = { "高频": "chip-gold", "强化": "chip-blue", "新增热点": "chip-green", "关注": "chip-red", "基础": "chip-gray" };
+    return `<span class="chip ${m[t] || "chip-gray"}">${esc(t)}</span>`;
+  }
+  function renderForecast() {
+    const F = FORECAST && FORECAST.papers ? FORECAST : null;
+    if (!F) { content().innerHTML = '<div class="empty">未找到预测数据</div>'; return; }
+    const K = F.knowledge || {};
+    const coreHtml = (K.core || []).map(g => `
+      <div class="card" style="margin-bottom:14px">
+        <div class="section-title">${esc(g.cat)}</div>
+        <div class="fc-items">
+          ${(g.items || []).map(it => `<div class="fc-item"><div class="fc-item-h">${esc(it.t)} ${tagChip(it.tag)}</div><div class="fc-item-d">${esc(it.d)}</div></div>`).join("")}
+        </div></div>`).join("");
+    const addHtml = (K.add || []).map(it => `
+      <div class="card fc-add"><div class="fc-item-h">${esc(it.t)} ${tagChip(it.tag)}</div><div class="fc-item-d">${esc(it.d)}</div></div>`).join("");
+    const hotHtml = (F.hotTopics || []).map(h => `
+      <div class="card" style="margin-bottom:12px">
+        <div class="fc-hot-t">${esc(h.title)}</div>
+        <div class="fc-hot-meta">政策/背景：${esc(h.driver)} ｜ 命题趋势：<b>${esc(h.trend)}</b></div>
+        <div class="fc-item-d">${esc(h.analysis)}</div>
+        <div class="muted" style="margin-top:6px">关联：${esc(h.relate)}</div></div>`).join("");
+    const qpHtml = (F.questionPredictions || []).map(g => `
+      <div class="card" style="margin-bottom:12px">
+        <div class="section-title">${esc(g.area)}</div>
+        <div class="muted" style="margin-bottom:8px">${esc(g.desc)}</div>
+        <div class="fc-types">${g.types.map(t => `<span class="chip chip-blue">${esc(t)}</span>`).join("")}</div></div>`).join("");
+    const paperHtm = F.papers.map(p => {
+      const st = paperStats(p.questions);
+      return `<div class="card paper-card">
+        <div class="paper-title">${esc(p.title)}</div>
+        <div class="paper-meta">单选 ${st.s} · 多选 ${st.m} · 案例 ${st.c} ｜ 时长 ${p.minutes}分钟 ｜ 满分160 · 合格96</div>
+        <div class="paper-acts">
+          <button class="btn btn-primary" data-fc="exam" data-id="${p.id}">▶ 开始考试</button>
+          <button class="btn btn-ghost" data-fc="answer" data-id="${p.id}">📖 试卷+标准答案</button>
+        </div></div>`;
+    }).join("");
+
+    content().innerHTML = `
+      <div class="no-print" style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:12px">
+        <button class="btn btn-primary" id="fcPdf">📄 一键导出 PDF（整板块）</button>
+        <span class="muted">更新于 ${esc(F.updated || "")} ｜ 预测仅供参考，以官方教材与大纲为准</span>
+      </div>
+      <div class="print-area">
+        <div class="fc-hero">
+          <div class="fc-hero-h">🔮 2027年一级建造师（机电工程）考试预测</div>
+          <div class="fc-hero-s">综合名师 / 培训机构 / 考情大数据，从知识点、热点、题目三维度给出备考方向，并附 3 套独立预测模拟卷</div>
+          <div class="fc-hero-d">${esc(F.intro || "")}</div>
+        </div>
+
+        <div class="fc-sec">
+          <div class="fc-sec-h"><span class="fc-sec-n">一</span> 知识点预测</div>
+          <div class="fc-sub">高频核心知识点</div>
+          ${coreHtml}
+          <div class="fc-sub">今年可能新增 / 强化的考点</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">${addHtml}</div>
+        </div>
+
+        <div class="fc-sec">
+          <div class="fc-sec-h"><span class="fc-sec-n">二</span> 热点考点预测</div>
+          <div class="muted" style="margin:4px 0 10px">结合时事热点、政策变化与行业动态，分析可能成为考点的热门话题</div>
+          ${hotHtml}
+        </div>
+
+        <div class="fc-sec">
+          <div class="fc-sec-h"><span class="fc-sec-n">三</span> 可能考查的题目预测</div>
+          ${qpHtml}
+        </div>
+
+        <div class="fc-sec">
+          <div class="fc-sec-h"><span class="fc-sec-n">四</span> 独立编制 · 3套预测模拟试题</div>
+          <div class="muted" style="margin:4px 0 10px">每套均为 20单选 + 10多选 + 5案例（满分160·合格96），附标准答案与详细解析，覆盖前述预测重点</div>
+          ${paperHtm}
+        </div>
+        <div class="fc-foot">本预测板块由学习系统自动汇总整理，仅供备考参考，请以官方教材、考试大纲及主管部门公告为准。</div>
+      </div>`;
+
+    $("#fcPdf").onclick = () => window.print();
+    content().querySelectorAll("[data-fc]").forEach(b => b.onclick = () => {
+      const act = b.dataset.fc, id = b.dataset.id;
+      if (act === "answer") renderPaperDetail(id, "forecast");
+      else startPaperExam(id, "forecast");
+    });
   }
 
   /* ============== 成就 ============== */
