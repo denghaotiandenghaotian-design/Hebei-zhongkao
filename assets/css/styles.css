@@ -317,3 +317,48 @@ table.tbl th{background:var(--panel-2);color:var(--gold-soft)}
   .grid-2,.grid-3,.grid-4{grid-template-columns:1fr}
   .mock-row{gap:12px}.field{flex:1;min-width:120px}
 }
+
+/* ---------- 考点归纳 ---------- */
+.sum-pts{background:var(--bg-2);border-radius:10px;padding:14px 18px}
+.sum-pts ol{margin:0;padding-left:20px;color:var(--text)}
+.sum-pts li{margin:8px 0;line-height:1.7}
+.sum-fm{margin-top:14px}
+.sub-t{font-size:13.5px;font-weight:700;color:var(--gold);margin-bottom:10px}
+.fm-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:10px}
+.formula-chip{background:linear-gradient(135deg,rgba(226,162,82,.14),rgba(226,162,82,.06));border:1px solid rgba(226,162,82,.45);border-radius:10px;padding:10px 12px}
+.fc-name{font-size:12.5px;font-weight:700;color:var(--gold);margin-bottom:4px}
+.fc-expr{font-family:"Consolas","Courier New",monospace;font-size:13px;font-weight:700;color:#ffd9a0;word-break:break-all}
+.fc-note{font-size:11.5px;color:var(--text-dim);margin-top:4px}
+
+/* ---------- 思维导图 ---------- */
+.mindmap-card{padding:10px;overflow:auto}
+.mindmap-wrap{min-width:860px}
+.mindmap-wrap svg text{user-select:none}
+.mindmap-wrap rect{transition:filter .15s}
+.mindmap-wrap rect:hover{filter:brightness(1.15)}
+
+/* ---------- 试卷库 ---------- */
+.paper-card{margin-bottom:12px;display:flex;flex-direction:column;gap:8px}
+.paper-title{font-size:15px;font-weight:700;color:var(--gold)}
+.paper-meta{font-size:12.5px;color:var(--text-dim)}
+.paper-acts{display:flex;gap:10px;flex-wrap:wrap}
+
+/* ---------- 标准答案 ---------- */
+.option.ans-right{border-color:rgba(62,201,138,.75);background:rgba(62,201,138,.12);color:#7ee0ae}
+.option.ans-right:hover{background:rgba(62,201,138,.18)}
+.ans-mark{color:#3ec98a;font-weight:800;margin-left:2px}
+.ans-analysis{margin-top:8px;font-size:13px;color:#9fc2e8;background:rgba(21,35,71,.7);border-left:3px solid var(--gold);padding:8px 10px;border-radius:0 8px 8px 0;line-height:1.7}
+
+/* ---------- 打印（导出 PDF） ---------- */
+@media print{
+  @page{size:A4 landscape;margin:8mm}
+  body{background:#fff}
+  .sidebar,.topbar,.no-print,.streak,#resetBtn{display:none !important}
+  .main{margin-left:0 !important;padding:0}
+  .content{padding:0}
+  .card{box-shadow:none;background:#fff}
+  .print-area{min-width:0;max-width:100%}
+  .print-area svg{width:100% !important;height:auto !important}
+  .print-area text{fill:#111 !important}
+  .mindmap-wrap{min-width:0}
+}
