@@ -26,6 +26,11 @@
   /* ---------------- 数据归一化 ---------------- */
   const Q = (DATA.questions || []).map(normQ).filter(Boolean);
   const QMAP = {}; Q.forEach(q => QMAP[q.id] = q);
+  /* 扩展题库：模拟卷题库 + 历年真题 并入主题库（练习/随机考试共用） */
+  const EXTRA = [];
+  ((window.YJ_DATA && window.YJ_DATA.mockBank && window.YJ_DATA.mockBank.questions) || []).forEach(q => EXTRA.push(q));
+  ((window.YJ_DATA && window.YJ_DATA.realPapers && window.YJ_DATA.realPapers.papers) || []).forEach(p => (p.questions || []).forEach(q => EXTRA.push(q)));
+  EXTRA.forEach(q => { const n = normQ(q); if (n && !QMAP[n.id]) { Q.push(n); QMAP[n.id] = n; } });
   const CHAPTERS = DATA.chapters || [];
   const CHMAP = {}; CHAPTERS.forEach(c => CHMAP[c.code] = c);
   const getCh = code => CHMAP[code] || { code, name: code, knowledge: [] };
@@ -150,7 +155,7 @@
   }
 
   /* ---------------- 渲染调度 ---------------- */
-  const VIEWS = { dashboard: "学习概览", practice: "题库练习", review: "章节复习", wrongbook: "错题收藏", exam: "模拟考试", progress: "进度跟踪", knowledge: "考点知识库", lectures: "名师讲课" };
+  const VIEWS = { dashboard: "学习概览", practice: "题库练习", review: "章节复习", wrongbook: "错题收藏", exam: "模拟考试", papers: "试卷库", progress: "进度跟踪", summary: "考点归纳", mindmap: "思维导图", knowledge: "考点知识库", lectures: "名师讲课" };
   let CURRENT = "dashboard";
   const content = () => $("#content");
 
@@ -160,7 +165,7 @@
     $("#viewTitle").textContent = VIEWS[v] || "";
     document.body.classList.remove("nav-open");
     SESSION = null; EXAM = null;
-    ({ dashboard: renderDashboard, practice: renderPractice, review: renderReview, wrongbook: renderWrongbook, exam: renderExam, progress: renderProgress, knowledge: renderKnowledge, lectures: renderLectures }[v] || renderDashboard)();
+    ({ dashboard: renderDashboard, practice: renderPractice, review: renderReview, wrongbook: renderWrongbook, exam: renderExam, papers: renderPapers, progress: renderProgress, summary: renderSummary, mindmap: renderMindmap, knowledge: renderKnowledge, lectures: renderLectures }[v] || renderDashboard)();
     content().scrollTop = 0;
   }
 
@@ -578,7 +583,7 @@
     sec += block(e.cases, `三、案例分析题（共 ${e.cases.length} 题）`);
     content().innerHTML = `
       <div class="exam-bar">
-        <div><b>机电工程管理与实务 · 模拟考试</b></div>
+        <div><b>${e.title ? esc(e.title) : "机电工程管理与实务 · 模拟考试"}</b></div>
         ${timerHtml}
         <button class="btn btn-primary" id="submitExam">交卷</button>
       </div>
@@ -806,6 +811,229 @@
     </div>`).join("");
     content().innerHTML = `<div class="muted" style="margin-bottom:12px">名师资源整理自网络公开渠道，按备考阶段推荐。请以各平台最新课程为准。</div>
       <div class="grid grid-2">${cards}</div>`;
+  }
+
+  /* ============== 考点归纳 ============== */
+  const SUMMARY = (window.YJ_DATA && window.YJ_DATA.summary) || {};
+  const MINDMAPS = (window.YJ_DATA && window.YJ_DATA.mindmaps) || [];
+  const MOCKBANK = (window.YJ_DATA && window.YJ_DATA.mockBank) || { questions: [], papers: [] };
+  const REALPAPERS = (window.YJ_DATA && window.YJ_DATA.realPapers) || { papers: [] };
+  let MM_PRESELECT = "";
+
+  function renderSummary() {
+    const codes = Object.keys(SUMMARY);
+    const opts = codes.map(c => `<option value="${c}">${esc(SUMMARY[c].name)}（${c}）</option>`).join("");
+    content().innerHTML = `
+      <div class="muted" style="margin-bottom:12px">按章节归纳高频考点与公式/关键数据，配合「🧠 思维导图」栏目做结构化记忆，可一键导出 PDF。</div>
+      <div class="card" style="max-width:880px;margin-bottom:14px">
+        <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+          <span class="field-l">选择章节</span>
+          <select class="select" id="sumCh" style="width:280px">${opts}</select>
+          <button class="btn btn-ghost" id="sumMap">🧠 生成该章思维导图</button>
+        </div>
+      </div>
+      <div id="sumBody" style="max-width:880px"></div>`;
+    const draw = () => { $("#sumBody").innerHTML = summaryHtml($("#sumCh").value); };
+    $("#sumCh").onchange = draw;
+    $("#sumMap").onclick = () => { MM_PRESELECT = $("#sumCh").value; setView("mindmap"); };
+    draw();
+  }
+  function summaryHtml(code) {
+    const s = SUMMARY[code];
+    if (!s) return '<div class="empty">暂无归纳数据</div>';
+    const pts = (s.points || []).map(p => `<li>${esc(p)}</li>`).join("");
+    const fm = (s.formulas || []).map(f => `
+      <div class="formula-chip"><div class="fc-name">${esc(f.name)}</div><div class="fc-expr">${esc(f.expr)}</div>${f.note ? `<div class="fc-note">${esc(f.note)}</div>` : ""}</div>`).join("");
+    return `<div class="card"><div class="section-title">${esc(s.name)} · 考点归纳</div>
+      <div class="sum-pts"><ol>${pts}</ol></div>
+      ${fm ? `<div class="sum-fm"><div class="sub-t">📐 公式与关键数据</div><div class="fm-grid">${fm}</div></div>` : ""}
+      <div class="muted" style="margin-top:10px">来源：2026版《机电工程管理与实务》考纲归纳，重点数字务必精确记忆。</div></div>`;
+  }
+
+  /* ============== 思维导图（纵向） ============== */
+  function renderMindmap() {
+    const opts = MINDMAPS.map(m => `<option value="${m.code}">${esc(m.title)}（${m.code}）</option>`).join("");
+    content().innerHTML = `
+      <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:12px" class="no-print">
+        <span class="field-l">选择章节</span>
+        <select class="select" id="mmCh" style="width:280px">${opts}</select>
+        <button class="btn btn-primary" id="mmPdf">📄 导出PDF（纵向导图）</button>
+        <span class="muted">金色节点 = 公式/关键数据</span>
+      </div>
+      <div class="card mindmap-card"><div id="mmBox" class="mindmap-wrap print-area"></div></div>
+      <div class="muted no-print" style="margin-top:8px">提示：导出 PDF 时请在打印对话框选择「纵向/横向」方向并按需缩放，即可得到整章思维导图。</div>`;
+    const draw = () => {
+      const code = $("#mmCh").value;
+      const m = MINDMAPS.find(x => x.code === code);
+      $("#mmBox").innerHTML = m ? mindmapSvg(m) : '<div class="empty">暂无导图</div>';
+    };
+    $("#mmCh").onchange = draw;
+    $("#mmPdf").onclick = () => window.print();
+    if (MM_PRESELECT) { const opt = $("#mmCh").querySelector('option[value="' + MM_PRESELECT + '"]'); if (opt) $("#mmCh").value = MM_PRESELECT; MM_PRESELECT = ""; }
+    draw();
+  }
+  function mindmapSvg(m) {
+    const NODE_W = 168, COL_W = 46, ROW_H = 96, PAD = 24;
+    const countLeaves = n => (n.children && n.children.length) ? n.children.reduce((s, c) => s + countLeaves(c), 0) : 1;
+    const rows = []; // depth -> max node height
+    const nodes = [];
+    function walk(n, depth, x0, parentIdx) {
+      const idx = nodes.length;
+      const kids = n.children || [];
+      nodes.push({ n, depth, x0, parentIdx });
+      if (!kids.length) return;
+      let x = x0;
+      kids.forEach(k => { walk(k, depth + 1, x, idx); x += countLeaves(k); });
+    }
+    const root = { name: m.root || m.title, tag: "root", children: m.children || [] };
+    walk(root, 0, 0, -1);
+    const L = countLeaves(root);
+    const maxDepth = Math.max(...nodes.map(nd => nd.depth));
+    // leaf span per node（后序递归，避免数组初始化期引用）
+    const spans = new Array(nodes.length);
+    function leafSpan(i) {
+      if (spans[i]) return spans[i];
+      const nd = nodes[i];
+      if (!nd.n.children || !nd.n.children.length) { spans[i] = [nd.x0, nd.x0 + 1]; return spans[i]; }
+      let lo = Infinity, hi = -Infinity;
+      nodes.forEach((o, j) => { if (o.parentIdx === i) { const sp = leafSpan(j); lo = Math.min(lo, sp[0]); hi = Math.max(hi, sp[1]); } });
+      spans[i] = [lo, hi]; return spans[i];
+    }
+    nodes.forEach((_, i) => leafSpan(i));
+    const wrapLines = (s, n) => { s = String(s || ""); const out = []; for (let i = 0; i < s.length; i += n) { out.push(s.slice(i, i + n)); if (out.length >= 2) { out[1] = out[1].slice(0, 15) + (s.length > 2 * n ? "…" : ""); break; } } return out; };
+    const nodeHeight = nd => {
+      const lines = wrapLines(nd.n.name, 10);
+      const extra = (nd.n.tag === "formula" && nd.n.detail) ? wrapLines(nd.n.detail, 16).length : 0;
+      return 30 + lines.length * 15 + extra * 14;
+    };
+    const W = Math.max(880, L * (NODE_W + COL_W) - COL_W + PAD * 2);
+    const H = (maxDepth + 1) * ROW_H + 40;
+    let edges = "", boxes = "";
+    nodes.forEach((nd, i) => {
+      const sp = spans[i];
+      const cx = PAD + (sp[0] + sp[1]) / 2 * (NODE_W + COL_W) - COL_W / 2;
+      const y = PAD + nd.depth * ROW_H;
+      const h = nodeHeight(nd);
+      const w = NODE_W;
+      nd._x = cx; nd._y = y; nd._w = w; nd._h = h;
+      if (nd.parentIdx >= 0) {
+        const p = nodes[nd.parentIdx];
+        const px = p._x, py = p._y + p._h;
+        edges += `<path d="M${px},${py} C${px},${py + 14} ${cx},${y - 14} ${cx},${y}" fill="none" stroke="#3d5a99" stroke-width="1.4"/>`;
+      }
+    });
+    nodes.forEach(nd => {
+      const { n } = nd; const cx = nd._x, y = nd._y, w = nd._w, h = nd._h;
+      const style = n.tag === "root" ? "fill:#e2a252;stroke:#b8833a" : n.tag === "formula" ? "fill:#e2a252;stroke:#b8833a" : n.tag === "branch" ? "fill:#1c2c55;stroke:#e2a252" : "fill:#152347;stroke:#3d5a99";
+      const tx = n.tag === "formula" || n.tag === "root" ? "#0e1630" : "#e6edf7";
+      const lines = wrapLines(n.name, 10);
+      const extra = (n.tag === "formula" && n.detail) ? wrapLines(n.detail, 16) : [];
+      let ts = "";
+      const cy = y + h / 2 - ((lines.length + extra.length) / 2) * 15;
+      lines.forEach((ln, li) => { ts += `<text x="${cx}" y="${cy + li * 15 + 5}" text-anchor="middle" font-size="12.5" fill="${tx}" font-weight="${(n.tag === "formula" || n.tag === "root") ? 700 : 600}">${esc(ln)}</text>`; });
+      extra.forEach((ln, li) => { ts += `<text x="${cx}" y="${cy + (lines.length + li) * 15 + 5}" text-anchor="middle" font-size="11" fill="#7a4a10">${esc(ln)}</text>`; });
+      boxes += `<g><rect x="${cx - w / 2}" y="${y}" width="${w}" height="${h}" rx="8" ${style.split(";").map(s => { const k = s.split(":")[0], v = s.split(":")[1]; return k + '="' + v + '"'; }).join(" ")}/>${ts}</g>`;
+    });
+    return `<div style="text-align:center;padding:6px 0"><div style="font-size:15px;font-weight:700;color:#e2a252;margin-bottom:4px">${esc(m.title)} · 思维导图（纵向）</div></div>
+      <svg viewBox="0 0 ${W} ${H}" width="100%" xmlns="http://www.w3.org/2000/svg" style="display:block">${edges}${boxes}</svg>`;
+  }
+
+  /* ============== 试卷库（10套模拟卷 + 5年真题） ============== */
+  let PAPER_TAB = "mock";
+  function renderPapers() {
+    content().innerHTML = `
+      <div class="seg" id="pbSeg">
+        <button class="seg-btn active" data-tab="mock">📝 模拟试卷（10套）</button>
+        <button class="seg-btn" data-tab="real">📜 历年真题（2021-2025）</button>
+      </div>
+      <div class="muted" style="margin:10px 0 12px" id="pbTip"></div>
+      <div id="pbBody"></div>`;
+    $("#pbSeg").onclick = e => { const b = e.target.closest(".seg-btn"); if (!b) return; $$(".seg-btn", $("#pbSeg")).forEach(x => x.classList.remove("active")); b.classList.add("active"); PAPER_TAB = b.dataset.tab; renderPbList(); };
+    renderPbList();
+  }
+  function paperStats(qs) { return { s: qs.filter(q => q.type === "single").length, m: qs.filter(q => q.type === "multiple").length, c: qs.filter(q => q.type === "case").length }; }
+  function mulberry32(seed) { return function () { let t = seed += 0x6D2B79F5; t = Math.imul(t ^ t >>> 15, t | 1); t ^= t + Math.imul(t ^ t >>> 7, t | 61); return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+  function hashStr(s) { let h = 2166136261; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; }
+  function buildMockPaper(pid) {
+    const rnd = mulberry32(hashStr(pid));
+    const seeded = (arr, n) => { const a = arr.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a.slice(0, n); };
+    return { singles: seeded(singleQ.filter(q => /^MK/.test(q.id)), 20), multis: seeded(multiQ.filter(q => /^MK/.test(q.id)), 10), cases: seeded(caseQ.filter(q => /^MK/.test(q.id)), 4) };
+  }
+  function renderPbList() {
+    const tip = $("#pbTip"), body = $("#pbBody");
+    if (PAPER_TAB === "real") {
+      tip.textContent = "近5年全套真题（回忆整理版）：依据公开考情与考生回忆整理，题型题量完全对齐官方真题（单选20×1 / 多选10×2 / 案例5题共120分），个别表述以官方试卷为准。";
+      body.innerHTML = REALPAPERS.papers.map(p => { const st = paperStats(p.questions); return paperCard(p, st, true); }).join("");
+    } else {
+      tip.textContent = "10套全真模拟卷：引擎按试卷编号固定抽题（同一套卷每次题目一致），附标准答案，支持限时考试与答案浏览。";
+      body.innerHTML = MOCKBANK.papers.map(p => paperCard(p, { s: 20, m: 10, c: 4 }, false)).join("");
+    }
+    body.querySelectorAll("[data-act]").forEach(b => b.onclick = () => {
+      const act = b.dataset.act, id = b.dataset.id, isReal = PAPER_TAB === "real";
+      if (act === "answer") renderPaperDetail(id, isReal);
+      else startPaperExam(id, isReal);
+    });
+  }
+  function paperCard(p, st, isReal) {
+    return `<div class="card paper-card">
+      <div class="paper-title">${esc(p.title)}</div>
+      <div class="paper-meta">单选 ${st.s} · 多选 ${st.m} · 案例 ${st.c} ｜ 时长 ${p.minutes}分钟 ｜ 满分160 · 合格96</div>
+      <div class="paper-acts">
+        <button class="btn btn-primary" data-act="exam" data-id="${p.id}">▶ 开始考试</button>
+        <button class="btn btn-ghost" data-act="answer" data-id="${p.id}">📖 试卷+标准答案</button>
+      </div></div>`;
+  }
+  function getPaperQuestions(pid, isReal) {
+    if (isReal) { const p = REALPAPERS.papers.find(x => x.id === pid); return { qs: p ? p.questions.slice() : [], meta: p }; }
+    const p = MOCKBANK.papers.find(x => x.id === pid);
+    const b = buildMockPaper(pid);
+    return { qs: [].concat(b.singles, b.multis, b.cases), meta: p };
+  }
+  function startPaperExam(pid, isReal) {
+    const { qs, meta } = getPaperQuestions(pid, isReal);
+    if (!qs.length) { alert("试卷为空。"); return; }
+    CURRENT = "exam";
+    $$(".nav-item").forEach(b => b.classList.toggle("active", b.dataset.view === "exam"));
+    $("#viewTitle").textContent = "模拟考试";
+    EXAM = { singles: qs.filter(q => q.type === "single"), multis: qs.filter(q => q.type === "multiple"), cases: qs.filter(q => q.type === "case"), picks: {}, revealed: false, timeMode: true, deadline: Date.now() + (meta ? meta.minutes : 240) * 60000, phase: "paper", start: Date.now(), caseScores: {}, title: meta ? meta.title : "试卷" };
+    renderPaper();
+  }
+  function renderPaperDetail(pid, isReal) {
+    const { qs, meta } = getPaperQuestions(pid, isReal);
+    const st = paperStats(qs);
+    let show = true;
+    const header = `<button class="btn btn-ghost" id="pbBack" style="margin-bottom:12px">← 返回试卷库</button>
+      <div class="card"><div class="section-title">${esc(meta ? meta.title : "试卷")}</div>
+        <div class="muted">单选 ${st.s} · 多选 ${st.m} · 案例 ${st.c} ｜ 时长 ${meta ? meta.minutes : 240}分钟 ｜ 满分160 · 合格96</div>
+        <div style="margin-top:10px;display:flex;gap:10px;flex-wrap:wrap">
+          <button class="btn btn-primary" id="peExam">▶ 开始考试</button>
+          <button class="btn btn-ghost" id="peToggle">${show ? "🙈 隐藏答案" : "👁 显示答案"}</button>
+          <button class="btn btn-ghost" id="pePdf">📄 导出PDF</button>
+        </div></div>
+      <div class="muted" style="margin:10px 0">答题卡：共 ${st.s + st.m + st.c} 题，标准答案与解析已内嵌，可先自测再对照。</div>
+      <div id="peList"></div>`;
+    const draw = () => {
+      content().innerHTML = header;
+      $("#pbBack").onclick = () => renderPapers();
+      $("#peExam").onclick = () => startPaperExam(pid, isReal);
+      $("#peToggle").onclick = () => { show = !show; $("#peToggle").textContent = show ? "🙈 隐藏答案" : "👁 显示答案"; drawList(); };
+      $("#pePdf").onclick = () => window.print();
+      drawList();
+    };
+    const drawList = () => {
+      $("#peList").innerHTML = qs.map((q, i) => answerListHtml(q, i, show)).join("");
+    };
+    draw();
+  }
+  function answerListHtml(q, i, show) {
+    if (q.type === "case") {
+      const subs = q.subQuestions.map((sq, k) => `<div class="card" style="margin:8px 0;background:var(--bg-2)">
+        <div class="sub-q"><b>问${k + 1}（${sq.score}分）：</b>${esc(sq.q)}</div>
+        ${show ? `<div class="sub-a">标准答案：${esc(sq.a)}</div>` : ""}</div>`).join("");
+      return `<div class="mock-q" style="margin-bottom:16px"><div class="q-stem">${i + 1}. ${esc(q.stem)}</div>${subs}</div>`;
+    }
+    const opts = q.options.map((op, j) => { const L = String.fromCharCode(65 + j); const is = (q.answer || []).includes(L); return `<div class="option ${is ? "ans-right" : ""}" style="cursor:default;pointer-events:none">${L}. ${esc(op)}${is ? ' <span class="ans-mark">✓</span>' : ""}</div>`; }).join("");
+    return `<div class="mock-q" style="margin-bottom:16px"><div class="q-stem">${i + 1}. ${esc(q.stem)}</div>${opts}${show ? `<div class="ans-analysis">✅ 标准答案：${esc((q.answer || []).join("、"))} —— ${esc(q.analysis)}</div>` : ""}</div>`;
   }
 
   /* ============== 成就 ============== */
